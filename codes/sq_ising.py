@@ -1,8 +1,8 @@
 """
 Данный код позволяет смоделировать квадратную модель Изинга без внешнего поля.
 
-Пользователь при желании может задать любые желаемые размеры решётки N×N, любой температурный интервал T,
-а также желаемое количество температурных точек для создания графика nt,
+Пользователь при желании может задать любые желаемые размеры решётки N×N (N - натуральное число),
+любой температурный интервал T, а также желаемое количество температурных точек для создания графика nt,
 округлённое вверх до числа, кратного количеству логических процессоров на компьютере.
 
 По умолчанию установлены значения, при которых за достаточно короткое время можно
@@ -11,6 +11,9 @@
 В процессе работы происходит приблизительный подсчёт требуемого количества времени.
 
 В коде могут присутствовать наработки, относящиеся к предполагаемой дальнейшей работе в этой теме.
+
+При моделировании строго больше 6 случаев в одной размерности
+не будут созданы изображения степенных аппроксимаций ветвей графиков.
 """
 
 # Импортирование используемых библиотек
@@ -23,7 +26,6 @@ import time
 import multiprocessing
 import os
 from datetime import datetime
-import zipfile
 from matplotlib.ticker import MultipleLocator
 from scipy.optimize import curve_fit
 import zipfile
@@ -35,19 +37,19 @@ matplotlib.rcParams['font.family'] = 'sans-serif'
 matplotlib.rcParams['font.sans-serif'] = ['Tahoma']
 
 """
-Переменные ниже задают параметры моделирования. Если задать массивом
+Переменные ниже задают параметры моделирования.
 """
 n_proc = multiprocessing.cpu_count()  # подсчёт логических операторов на компьютере
 eqSteps = int(3 * 1e2)  # количество МК шагов для прихода в равновесное состояние (рекомендую 300)
 mcSteps = int(1e3)  # количество МК шагов для подсчёта физических величин (рекомендую 1000)
-it = 100  # количество желаемых температурных точек (рекомендую 100)
+it = 24  # количество желаемых температурных точек (рекомендую 100)
 calc = it // n_proc + ((it // n_proc) != (it / n_proc))  # количество температурных точек на один логический процессор
 nt = int(calc * n_proc)  # реальное количество используемых температурных точек
-NN_2 = [5, 10, 15]  # размеры желанных 2D решёток (рекомендую [15, 20])
+NN_2 = [1,2,3,4,5,6,7,8]  # размеры желанных 2D решёток (рекомендую [15, 20])
 NN_3 = [15]  # размеры желанных 3D решёток (не рекомендую)
 D = [2]  # желаемые размерности (2 или 3) (рекомендую [2])
-T_2 = np.linspace(1.5, 2.5, nt)  # желаемый температурный интервал для 2D (рекомендую (1.5, 2.5, nt))
-T_3 = np.linspace(3.5, 5.5, nt)  # желаемый температурный интервал для 3D (рекомендую (3.5, 5.5, nt))
+T_2 = np.linspace(1.9, 2.4, nt)  # желаемый температурный интервал для 2D (рекомендую (1.5, 2.5, nt))
+T_3 = np.linspace(3.7, 5.5, nt)  # желаемый температурный интервал для 3D (рекомендую (3.5, 5.5, nt))
 
 
 def mcmove_2d(config, beta, B, N):
@@ -210,8 +212,8 @@ if __name__ == "__main__":
     Start = time.time()
     # создание папок для создания массивов с физическими величинами для дальнейшего их анализа
     for d in D:
-        dir_name = f'data_{d}d_ising'
-        output_filename = f'data_{d}d_ising'
+        dir_name = f'data_sq_{d}d_ising'
+        output_filename = f'data_sq_{d}d_ising'
         basedir = os.path.abspath(os.getcwd())
         if os.path.exists(dir_name):
             shutil.rmtree(dir_name)
@@ -243,35 +245,6 @@ if __name__ == "__main__":
             C = [a for b in C for a in b]
             X = [a for b in X for a in b]
 
-            # # код ниже создаёт графики для каждого отдельного моделирования
-            # f = plt.figure(figsize=(18, 10))
-            #
-            # sp1 = f.add_subplot(2, 2, 1)
-            # plt.scatter(globals()[f'T_{d}'], E, s=3, marker='o', color='IndianRed')
-            # plt.xlabel("${k_BT}/{J}$", fontsize=20, fontweight="bold")
-            # plt.ylabel("$E$", fontsize=25, fontweight="bold")
-            # plt.axis('tight')
-            #
-            # sp2 = f.add_subplot(2, 2, 2)
-            # plt.scatter(globals()[f'T_{d}'], np.abs(M), s=3, marker='o', color='RoyalBlue')
-            # plt.xlabel("${k_BT}/{J}$", fontsize=20, fontweight="bold")
-            # plt.ylabel("$M$ ", fontsize=25, fontweight="bold")
-            # plt.axis('tight')
-            #
-            # sp3 = f.add_subplot(2, 2, 3)
-            # plt.scatter(globals()[f'T_{d}'], C, s=3, marker='o', color='IndianRed')
-            # plt.xlabel("${k_BT}/{J}$", fontsize=20, fontweight="bold")
-            # plt.ylabel("$C_v$", fontsize=25, fontweight="bold")
-            # plt.axis('tight')
-            #
-            # sp4 = f.add_subplot(2, 2, 4)
-            # plt.scatter(globals()[f'T_{d}'], X, s=3, marker='o', color='RoyalBlue')
-            # plt.xlabel("${k_BT}/{J}$", fontsize=20, fontweight="bold")
-            # plt.ylabel("$\chi$", fontsize=25, fontweight="bold")
-            # plt.axis('tight')
-            # # сохранение полученного графика каждого отдельного моделирования
-            # plt.savefig(f"{basedir}/{dir_name}/sq_ising_{d}d_MC_test_N={str(N)}.png", bbox_inches='tight', dpi=300)
-            # plt.show()
             # создание .zip архива с результатами каждого отдельного моделирования
             for i in range(5):
                 file = open(f"{basedir}/{dir_name}/{'EMCXT'[i]}_{d}d_N={N}.txt", "w")
@@ -281,9 +254,9 @@ if __name__ == "__main__":
         shutil.rmtree(dir_name)
     # код ниже объединяет все полученные графики на одном
     for d in D:
-        dir_name = f'data_{d}d_ising'
+        dir_name = f'data_sq_{d}d_ising'
         basedir = os.path.abspath(os.getcwd())
-        zip_name = f'data_{d}d_ising.zip'
+        zip_name = f'data_sq_{d}d_ising.zip'
         with zipfile.ZipFile(f"{zip_name}", 'r') as zip_ref:
             zip_ref.extractall(f"{basedir}/{dir_name}")
         for N in globals()[f"NN_{d}"]:
@@ -298,7 +271,6 @@ if __name__ == "__main__":
                 globals()[f"X_{d}d_N={N}"] = (eval(f.readline()))
             with open(f"{basedir}\\{dir_name}\\T_{name}", "r") as f:
                 globals()[f"T_{d}d_N={N}"] = (eval(f.readline()))
-        colours = 'ymcgb'
         f = plt.figure(figsize=(18, 10))
         titles = ['Энергия', 'Намагниченность', 'Теплоёмкость', 'Магн. восприимчивость']
         for j in range(4):
@@ -308,17 +280,16 @@ if __name__ == "__main__":
             ax = plt.subplot(2, 2, j + 1)
             for i in range(len(globals()[f"NN_{d}"])):
                 N = globals()[f"NN_{d}"][i]
-                plt.scatter(globals()[f"T_{d}d_N={N}"], globals()[f"{letter}_{d}d_N={N}"], s=3, c=f"{colours[i]}",
-                            label=f"N={N}")
+                plt.scatter(globals()[f"T_{d}d_N={N}"], globals()[f"{letter}_{d}d_N={N}"], s=8, label=f"N={N}")
             if d == 2:
-                crit = 2 / np.log(1 + np.sqrt(2))
+                crit = 2.269
                 plt.plot([crit, crit], [max(globals()[f"{letter}_{d}d_N={N}"]), min(globals()[f"{letter}_{d}d_N={N}"])],
                          c='r', alpha=0.5, label=f"$T_c=${crit} (т.)")
             if d == 3:
                 crit = 4.5
                 plt.plot([crit, crit], [max(globals()[f"{letter}_{d}d_N={N}"]), min(globals()[f"{letter}_{d}d_N={N}"])],
                          c='r', alpha=0.5, label=f"$T_c=${crit} (т.)")
-            ax.set_xlabel("${k_BT}/{J}$", fontsize=15, fontweight="bold")
+            ax.set_xlabel(r"$\frac{k_BT}{J}$", fontsize=15, fontweight="bold")
             label = str(labels[j])
             ax.set_ylabel(f"{label}", fontsize=15, fontweight="bold")
             ax.axis('tight')
@@ -353,12 +324,10 @@ if __name__ == "__main__":
         return A * np.power(x, v) + b
 
 
-    col = ['red', 'grey', 'blue', 'green', 'brown']
-
     for d in D:
-        dir_name = f'data_{d}d_ising'
+        dir_name = f'data_sq_{d}d_ising'
         basedir = os.path.abspath(os.getcwd())
-        zip_name = f'data_{d}d_ising.zip'
+        zip_name = f'data_sq_{d}d_ising.zip'
         with zipfile.ZipFile(f"{zip_name}", 'r') as zip_ref:
             zip_ref.extractall(f"{basedir}/{dir_name}")
         Chis = []
@@ -378,52 +347,54 @@ if __name__ == "__main__":
         plt.figure(figsize=(16, 15))
         n = len(globals()[f"NN_{d}"])
         Ks = np.zeros(n)
-        gammas = np.zeros(n)
-        sigma_gamma = np.zeros(n)
+        alphas = np.zeros(n)
+        sigma_alpha = np.zeros(n)
         TCs = np.zeros(n)
         sigma_TCs = np.zeros(n)
+        show = True
         for i, Chi in enumerate(Chis):
             C = Chi
             N = globals()[f"NN_{d}"][i]
             T = np.linspace(globals()[f"T_{d}d_N={N}"][0], globals()[f"T_{d}d_N={N}"][-1], len(Chi))
-            if d == 2:
+            if len(Chis) > 6:
+                show = False
+                Tmax = np.argmax(Chi)
+                Tmax = C.index(Chi[Tmax])
+                Chi = C
+                T = np.linspace(globals()[f"T_{d}d_N={N}"][0], globals()[f"T_{d}d_N={N}"][-1], len(Chi))
+                sol, cov = curve_fit(eval(f"func_powerlaw_{d}d"), T[Tmax:], Chi[Tmax:], maxfev=int(1e9))
+                Ks[i] = sol[0]
+                alphas[i] = sol[1]
+                TCs[i] = sol[2]
+                sigma_alpha[i] = cov[1, 1]
+                sigma_TCs[i] = cov[2, 2]
+            else:
                 ax = plt.subplot(3, 2, i + 1)
-            else:
-                ax = plt.subplot(2, 2, i + 1)
-            # for _ in range(2):
-            #     Tmax = np.argmax(Chi)
-            #     Chi = Chi[Tmax + 1:]
-            # Chi = Chi[:40]
-            Tmax = np.argmax(Chi)
-            Tmax = C.index(Chi[Tmax])
-            if d == 2:
-                tt = [0, 0, 0, 0,
-                      0]
-            else:
-                tt = [0, 0, 0, 0, 0]
-            Chi = C
-            T = np.linspace(globals()[f"T_{d}d_N={N}"][0], globals()[f"T_{d}d_N={N}"][-1], len(Chi))
-            plt.scatter(T[Tmax + tt[i]:], Chi[Tmax + tt[i]:], s=0.6, c=col[i])
-            sol, cov = curve_fit(eval(f"func_powerlaw_{d}d"), T[Tmax + tt[i]:], Chi[Tmax + tt[i]:], maxfev=int(1e9))
-            Ks[i] = sol[0]
-            gammas[i] = sol[1]
-            TCs[i] = sol[2]
-            sigma_gamma[i] = cov[1, 1]
-            sigma_TCs[i] = cov[2, 2]
-            ax.plot(T[Tmax + tt[i]:], eval(f"func_powerlaw_{d}d")(T[Tmax + tt[i]:], Ks[i], gammas[i], TCs[i]), 'orange',
-                    label='fit')
-            ax.scatter(T[Tmax + tt[i]:], Chi[Tmax + tt[i]:], color=col[i], label=f'N={N}')
-            ax.text(0.8, 0.5, r'$\alpha$' + '= {}\n$T_c$ = {}'.format('%.3f' % (-1 * gammas[i]), '%.3f' % TCs[i]),
-                    transform=ax.transAxes,
-                    bbox=dict(facecolor=col[i], alpha=0.7), fontsize=10)
-            ax.set_xlabel('Температура', fontsize=10)
-            ax.set_ylabel('Теплоёмкость', fontsize=10)
-            ax.set_title(f"Аппроксимация N={N}, d={d}", fontsize=10, fontweight="bold")
-            plt.legend(loc='best')
-            plt.subplots_adjust(hspace=0.45)
-            plt.grid()
-        plt.show()
-
+                Tmax = np.argmax(Chi)
+                Tmax = C.index(Chi[Tmax])
+                Chi = C
+                T = np.linspace(globals()[f"T_{d}d_N={N}"][0], globals()[f"T_{d}d_N={N}"][-1], len(Chi))
+                plt.scatter(T[Tmax:], Chi[Tmax:], s=0.6)
+                sol, cov = curve_fit(eval(f"func_powerlaw_{d}d"), T[Tmax:], Chi[Tmax:], maxfev=int(1e9))
+                Ks[i] = sol[0]
+                alphas[i] = sol[1]
+                TCs[i] = sol[2]
+                sigma_alpha[i] = cov[1, 1]
+                sigma_TCs[i] = cov[2, 2]
+                ax.plot(T[Tmax:], eval(f"func_powerlaw_{d}d")(T[Tmax:], Ks[i], alphas[i], TCs[i]), 'orange',
+                        label='fit')
+                ax.scatter(T[Tmax:], Chi[Tmax:], label=f'N={N}')
+                ax.text(0.8, 0.5, r'$\alpha$' + '= {}\n$T_c$ = {}'.format('%.3f' % (-1 * alphas[i]), '%.3f' % TCs[i]),
+                        transform=ax.transAxes,
+                        bbox=dict(alpha=0.7), fontsize=10)
+                ax.set_xlabel('Температура', fontsize=10)
+                ax.set_ylabel('Теплоёмкость', fontsize=10)
+                ax.set_title(f"Аппроксимация N={N}, d={d}", fontsize=10, fontweight="bold")
+                plt.legend(loc='best')
+                plt.subplots_adjust(hspace=0.45)
+                plt.grid()
+        if show:
+            plt.show()
 
         n = [(1 / n) for n in globals()[f"NN_{d}"]]
         sol, cov = curve_fit(eval(f"powerlaw_{d}d"), n, TCs, maxfev=int(1e9))
@@ -431,16 +402,12 @@ if __name__ == "__main__":
         plt.figure(figsize=(16, 6))
 
         plt.subplot(1, 2, 1)
-
-        # plt.plot(n, TCs, 'o')
         plt.errorbar(n, TCs, yerr=sigma_TCs, fmt='o', capsize=4)
-        # plt.plot(n, powerlaw( n, sol[0], sol[1], sol[2]), 'orange', label='fit')
         plt.xlabel(r'$\frac{1}{N}$', fontsize=16)
         plt.ylabel('$T$', fontsize=16)
         plt.title('Критическая температура $T_c$', fontsize=20, fontweight="bold")
-        # plt.text(-0.15,-0.15,'a = {}\nν = {}\nTc={}'.format('%.2E'%sol[0],'%.3f'%(1/sol[1]),'%.3f'%sol[2]), transform=ax.transAxes,bbox=dict(facecolor='orange', alpha=0.5), fontsize=12)
         if d == 2:
-            T_cr = 2 / np.log(1 + np.sqrt(2))
+            T_cr = 2.269
         else:
             T_cr = 4.5
         plt.axhline(y=T_cr, linestyle='--', color=('red'), label='$T_{C,theory}$')
@@ -448,13 +415,9 @@ if __name__ == "__main__":
         plt.legend(fontsize=18, loc='best')
 
         plt.subplot(1, 2, 2)
-
-        # plt.plot(n, TCs, 'o')
-        plt.errorbar(n, -gammas, yerr=sigma_gamma, fmt='o', capsize=4)
-        # plt.plot(n, powerlaw( n, sol[0], sol[1], sol[2]), 'orange', label='fit')
+        plt.errorbar(n, -alphas, yerr=sigma_alpha, fmt='o', capsize=4)
         plt.xlabel(r'$\frac{1}{N}$', fontsize=16)
         plt.title(r'Критический показатель $\alpha$', fontsize=20, fontweight="bold")
-        # plt.text(-0.15,-0.15,'a = {}\nν = {}\nTc={}'.format('%.2E'%sol[0],'%.3f'%(1/sol[1]),'%.3f'%sol[2]), transform=ax.transAxes,bbox=dict(facecolor='orange', alpha=0.5), fontsize=12)
         if d == 2:
             th = 0
         else:
@@ -462,8 +425,4 @@ if __name__ == "__main__":
         plt.axhline(y=th, linestyle='--', color=('red'), label=r'$\alpha_{theory}$')
         plt.grid()
         plt.legend(fontsize=18, loc='best')
-
         plt.show()
-
-        # print(sol)
-        # print('v=',1/sol[1])
