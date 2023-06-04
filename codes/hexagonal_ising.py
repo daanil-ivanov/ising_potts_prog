@@ -44,15 +44,15 @@ matplotlib.rcParams['font.sans-serif'] = ['Tahoma']
 Переменные ниже задают параметры моделирования.
 """
 n_proc = multiprocessing.cpu_count()  # подсчёт логических операторов на компьютере
-eqSteps = int(3 * 1e2)  # количество МК шагов для прихода в равновесное состояние (рекомендую 300)
-mcSteps = int(1e3)  # количество МК шагов для подсчёта физических величин (рекомендую 1000)
-it = 8  # количество желаемых температурных точек (рекомендую 100)
+eqSteps = int(1e3)  # количество МК шагов для прихода в равновесное состояние (рекомендую 300)
+mcSteps = int(1e4)  # количество МК шагов для подсчёта физических величин (рекомендую 1000)
+it = 100  # количество желаемых температурных точек (рекомендую 100)
 calc = it // n_proc + ((it // n_proc) != (it / n_proc))  # количество температурных точек на один логический процессор
 nt = int(calc * n_proc)  # реальное количество используемых температурных точек
-NN_2 = [2,7,3,4,5,6]  # размеры желанных 2D решёток (рекомендую [15, 20])
+NN_2 = [5, 10]  # размеры желанных 2D решёток (рекомендую [15, 20])
 NN_3 = [15]  # размеры желанных 3D решёток (не рекомендую)
 D = [2]  # желаемые размерности (2 или 3) (рекомендую [2])
-T_2 = np.linspace(2.5, 3.5, nt)  # желаемый температурный интервал для 2D (рекомендую (1.5, 2.5, nt))
+T_2 = np.linspace(1, 4, nt)  # желаемый температурный интервал для 2D (рекомендую (1.5, 2.5, nt))
 T_3 = np.linspace(3.5, 5.5, nt)  # желаемый температурный интервал для 3D (рекомендую (3.5, 5.5, nt))
 
 
@@ -309,7 +309,7 @@ if __name__ == "__main__":
             ax = plt.subplot(2, 2, j + 1)
             for i in range(len(globals()[f"NN_{d}"])):
                 N = globals()[f"NN_{d}"][i]
-                plt.scatter(globals()[f"T_{d}d_N={N}"], globals()[f"{letter}_{d}d_N={N}"], s=8, label=f"N={N}")
+                plt.scatter(globals()[f"T_{d}d_N={N}"], globals()[f"{letter}_{d}d_N={N}"], s=20, label=f"N={N}")
             crit = globals()[f"{letter}_{d}d_N={N}"].index(max(globals()[f"{letter}_{d}d_N={N}"]))
             ax.set_xlabel(r"$\frac{k_BT}{J}$", fontsize=15, fontweight="bold")
             label = str(labels[j])
@@ -418,7 +418,7 @@ if __name__ == "__main__":
         if show:
             plt.show()
 
-        n = [(1 / n) for n in globals()[f"NN_{d}"]]
+        # n = [(1 / n) for n in globals()[f"NN_{d}"]]
         sol, cov = curve_fit(eval(f"powerlaw_{d}d"), n, TCs, maxfev=int(1e6))
         plt.figure(figsize=(16, 6))
         plt.subplot(1, 2, 1)

@@ -1,12 +1,16 @@
 """
-Данный код позволяет смоделировать квадратную модель Изинга без внешнего поля.
+Данный код позволяет смоделировать шестиугольную модель Изинга без внешнего поля.
 
-Пользователь при желании может задать любые желаемые размеры решётки N×N (N - натуральное число),
-любой температурный интервал T, а также желаемое количество температурных точек для создания графика nt,
+Пользователь при желании может задать любые желаемые размеры решётки N×N (N - натуральное число, означающее
+количество шестиугольников в одном ряду), любой температурный интервал T,
+а также желаемое количество температурных точек для создания графика nt,
 округлённое вверх до числа, кратного количеству логических процессоров на компьютере.
 
 По умолчанию установлены значения, при которых за достаточно короткое время можно
 пронаблюдать графики, характерные для фазовых переходов второго рода.
+
+Код также выводит численные значения полученных физических величин для конкретного N и конкретного d для
+дальнейшего более внимательного анализа на случай неправильно выбранной точки вершины.
 
 В процессе работы происходит приблизительный подсчёт требуемого количества времени.
 
@@ -40,91 +44,137 @@ matplotlib.rcParams['font.sans-serif'] = ['Tahoma']
 Переменные ниже задают параметры моделирования.
 """
 n_proc = multiprocessing.cpu_count()  # подсчёт логических операторов на компьютере
-eqSteps = int(3e2)  # количество МК шагов для прихода в равновесное состояние (рекомендую 300)
+eqSteps = int(3 * 1e2)  # количество МК шагов для прихода в равновесное состояние (рекомендую 300)
 mcSteps = int(1e3)  # количество МК шагов для подсчёта физических величин (рекомендую 1000)
-it = 24  # количество желаемых температурных точек (рекомендую 100)
+it = 20  # количество желаемых температурных точек (рекомендую 100)
 calc = it // n_proc + ((it // n_proc) != (it / n_proc))  # количество температурных точек на один логический процессор
 nt = int(calc * n_proc)  # реальное количество используемых температурных точек
-NN_2 = [5, 7, 10]  # размеры желанных 2D решёток (рекомендую [15, 20])
+NN_2 = [2]  # размеры желанных 2D решёток (рекомендую [15, 20])
 NN_3 = [15]  # размеры желанных 3D решёток (не рекомендую)
 D = [2]  # желаемые размерности (2 или 3) (рекомендую [2])
-T_2 = np.linspace(2., 2.6, nt)  # желаемый температурный интервал для 2D (рекомендую (1.5, 2.5, nt))
-T_3 = np.linspace(3.7, 5.5, nt)  # желаемый температурный интервал для 3D (рекомендую (3.5, 5.5, nt))
-J = 1  # ферромагнетик или антиферромагнетик (1 или -1)
+T_2 = np.linspace(0.1, 5.1, nt)  # желаемый температурный интервал для 2D (рекомендую (1.5, 2.5, nt))
+T_3 = np.linspace(3.5, 5.5, nt)  # желаемый температурный интервал для 3D (рекомендую (3.5, 5.5, nt))
 
 
-def mcmove_2d(config, beta, B, N, J):
-    """
-    Данная функция позволяет провести один шаг моделирования Монте-Карло
-    для двумерной решётки методом Метрополиса.
-    """
-    for _ in range(N ** 2):
-        i, j = np.random.randint(0, N), np.random.randint(0, N)
-        nb = J * (config[(i + 1) % N, j] + config[i, (j + 1) % N] + config[(i - 1), j] + config[i, (j - 1)])
-        # nb - сумма изменений энергии в соседях
-        dE = 2 * config[i, j] * nb
-        # ниже собственно работа метода Метрополиса
-        if dE < 0 or rand() < np.exp(-dE * beta):
-            config[i, j] *= -1
+def initialise_2d(n):
+    Nx = (2 * n) + 2
+    Ny = (2 * n) + 1
+    config = (((2 * np.random.randint(2, size=(Ny, Nx))) - 1))
+    for y in range(1, Ny + 1, 2):
+        for x in range(0, Nx, 4):
+            config[-y][x] = 0
+    for y in range(1, Ny + 1, 2):
+        for x in range(3, Nx, 4):
+            config[-y][x] = 0
+    for y in range(3, Ny + 1, 2):
+        for x in range(0, Nx, 4):
+            if n % 2 == 0 and (x + 2) >= Nx:
+                break
+            else:
+                config[-y + 1][x + 1] = 0
+                config[-y + 1][x + 2] = 0
+    if n % 2 == 0:
+        for y in range(1, Ny, 2):
+            config[y][-1] = 0
     return config
 
 
-def mcmove_3d(config, beta, B, N, J):
+def initialise_3d(n):
+    config = []
+    for i in range(n):
+        config.append(initialise_2d(n))
+    return np.array(config)
+
+
+def mcmove_2d(config, beta, n):
     """
-    Данная функция позволяет провести один шаг моделирования Монте-Карло
-    для трёхмерной решётки методом Метрополиса.
+    Monte Carlo move using Metropolis algorithm
     """
-    for _ in range(N ** 3):
-        i = np.random.randint(0, N)
-        j = np.random.randint(0, N)
-        k = np.random.randint(0, N)
-        nb = J * ((B ** (((i + 1) % N) != (i + 1))) * config[(i + 1) % N, j, k]
-                  + (B ** (((j + 1) % N) != (j + 1))) * config[i, (j + 1) % N, k]
-                  + (B ** (((i - 1) % N) != (i - 1))) * config[(i - 1), j, k]
-                  + (B ** (((j - 1) % N) != (j - 1))) * config[i, (j - 1), k]
-                  + (B ** (((k + 1) % N) != (k + 1))) * config[i, j, (k + 1) % N]
-                  + (B ** (((k - 1) % N) != (k - 1))) * config[i, j, (k - 1)])
-        # nb - сумма изменений энергии в соседях
-        dE = 2 * config[i, j, k] * nb
-        # ниже собственно метод Метрополиса
-        if dE < 0 or rand() < np.exp(-dE * beta):
-            config[i, j, k] *= -1
+    Nx = (2 * n) + 2
+    Ny = (2 * n) + 1
+    _ = 0
+    while _ != n ** 2:
+        a = np.random.randint(n)
+        b = np.random.randint(n)
+        s = config[a][b]
+        if s == 0:
+            pass
+        else:
+            _ += 1
+
+            if a % 2 == 0:  # строки начинающиеся 0
+                if config[a][b - 1] == 0:
+                    if a != 0 and a != Ny - 1:
+                        nb = config[a - 1][b - 1] + config[a + 1][b - 1] + config[a][b + 1]
+                    elif a == Ny - 1:
+                        nb = config[a - 1][b - 1] + config[1][b - 1] + config[a][b + 1]
+                    elif a == 0:
+                        nb = config[-2][b - 1] + config[a + 1][b - 1] + config[a][b + 1]
+                else:
+                    if a != 0 and a != Ny - 1:
+                        nb = config[a - 1][b + 1] + config[a + 1][b + 1] + config[a][b - 1]
+                    elif a == 0:
+                        nb = config[-2][b + 1] + config[a + 1][b + 1] + config[a][b - 1]
+                    elif a == Ny - 1:
+                        nb = config[a - 1][b + 1] + config[1][b + 1] + config[a][b - 1]
+            else:  # строки начинающиеся 1
+                if b != 0 and b != Nx - 1:
+                    if config[a][b - 1] == 0:
+                        nb = config[a][b + 1] + config[a - 1][b - 1] + config[a + 1][b - 1]
+                    else:
+                        nb = config[a][b - 1] + config[a - 1][b + 1] + config[a + 1][b + 1]
+                elif b == 0:
+                    nb = config[a - 1][b + 1] + config[a + 1][b + 1] + config[a][-1 - (n % 2 == 0)]
+                elif b == Nx - 1:
+                    nb = config[a - 1][b - 1] + config[a + 1][b - 1] + config[a][0]
+            cost = 2 * s * nb
+            if cost < 0 or rand() < np.exp(-cost * beta):
+                config[a, b] = -s
     return config
 
 
-def calcEnergy_2d(config, bb, n, J):
+def calcEnergy_2d(config, n):
     """
-    Подсчёт энергии в заданной 2D решётке
-    """
-    energy = 0
-    for i in range(n):
-        for j in range(n):
-            energy += -1 * J * ((bb ** (((i + 1) % n) != (i + 1))) * config[(i + 1) % n, j]
-                               + (bb ** (((j + 1) % n) != (j + 1))) * config[i, (j + 1) % n]
-                               + (bb ** (((i - 1) % n) != (i - 1))) * config[(i - 1) % n, j]
-                               + (bb ** (((j - 1) % n) != (j - 1))) * config[i, (j - 1) % n]) * config[i, j]
-    # Делим энергию на 4, так как мы считаем повторяющееся взаимодействие между соседями
-    return energy / 4.
-
-
-def calcEnergy_3d(config, bb, n, J):
-    """
-    Подсчёт энергии в заданной 3D решётке
+    Energy of a given configuration
     """
     energy = 0
-    for i in range(n):
-        for j in range(n):
-            for k in range(n):
-                energy += J * -((bb ** (((i + 1) % n) != (i + 1))) * config[(i + 1) % n, j, k]
-                                + (bb ** (((j + 1) % n) != (j + 1))) * config[i, (j + 1) % n, k]
-                                + (bb ** (((i - 1) % n) != (i - 1))) * config[(i - 1) % n, j, k]
-                                + (bb ** (((j - 1) % n) != (j - 1))) * config[i, (j - 1) % n, k]
-                                + (bb ** (((k + 1) % n) != (k + 1))) * config[i, j, (k + 1) % n]
-                                + (bb ** (((k - 1) % n) != (k - 1))) * config[i, j, (k - 1) % n]) * config[i, j, k]
-    return energy / 6.
+    Nx = (2 * n) + 2
+    Ny = (2 * n) + 1
+    for a in range(len(config)):
+        for b in range(len(config)):
+            if config[a, b] == 0:
+                pass
+            else:
+                if a % 2 == 0:
+                    if config[a][b - 1] == 0:
+                        if a != 0 and a != Ny - 1:
+                            nb = config[a - 1][b - 1] + config[a + 1][b - 1] + config[a][b + 1]
+                        elif a == Ny - 1:
+                            nb = config[a - 1][b - 1] + config[1][b - 1] + config[a][b + 1]
+                        elif a == 0:
+                            nb = config[-2][b - 1] + config[a + 1][b - 1] + config[a][b + 1]
+                    else:
+                        if a != 0 and a != Ny - 1:
+                            nb = config[a - 1][b + 1] + config[a + 1][b + 1] + config[a][b - 1]
+                        elif a == 0:
+                            nb = config[-2][b + 1] + config[a + 1][b + 1] + config[a][b - 1]
+                        elif a == Ny - 1:
+                            nb = config[a - 1][b + 1] + config[1][b + 1] + config[a][b - 1]
+                else:
+                    if b != 0 and b != Nx - 1:
+                        if config[a][b - 1] == 0:
+                            nb = config[a][b + 1] + config[a - 1][b - 1] + config[a + 1][b - 1]
+                        else:
+                            nb = config[a][b - 1] + config[a - 1][b + 1] + config[a + 1][b + 1]
+                    elif b == 0:
+                        nb = config[a - 1][b + 1] + config[a + 1][b + 1] + config[a][-1 - (n % 2 == 0)]
+                    elif b == Nx - 1:
+                        nb = config[a - 1][b - 1] + config[a + 1][b - 1] + config[a][0]
+                energy += -nb * config[a, b]
+    return energy / 3.
 
 
-def ising(calc, proc, b, N, d, J):
+def ising(calc, proc, N, d):
     """
     В данной функции происходит моделирование системы на заданных температурных точках,
     все температурные точки одинаково распределены между всеми логическими процессорами
@@ -140,7 +190,9 @@ def ising(calc, proc, b, N, d, J):
     par = np.zeros(4 * calc).reshape((4, calc))
     for i in range(calc):
         # в строчке ниже происходит собственно моделирование и запись величины в точке температуры
-        par[0][i], par[1][i], par[2][i], par[3][i] = sim_tt(N, (calc * proc + i), b, d, J)
+        parametrs = sim_tt(N, (calc * proc + i), d)
+        for j in range(4):
+            par[j][i] = parametrs[j]
         # в условии ниже происходит приблизительный расчёт нужного времени
         if flag == False:
             flag = True
@@ -157,7 +209,7 @@ def ising(calc, proc, b, N, d, J):
         file.close()
 
 
-def sim_tt(N, tt, b, d, J):
+def sim_tt(N, tt, d):
     """
     В данной функции происходит собственно моделирование случайно заданной системы и
     подсчёт полученных физических величин в конкретной температурной точке tt.
@@ -170,24 +222,30 @@ def sim_tt(N, tt, b, d, J):
 
     # следующие 6 строк нужны только для разделения моделирования двумерной системы от трёхмерной
     if d == 2:
-        config = (((2 * np.random.randint(2, size=(N, N))) - 1))
+        config = initialise_2d(N)
     else:
-        config = (((2 * np.random.randint(2, size=(N, N, N))) - 1))
+        config = initialise_3d(N)
     calcEnergy = f"calcEnergy_{d}d"
     mcmove = f"mcmove_{d}d"
 
     for i in range(eqSteps):  # МК шаги до прихода в равновесное состояние
-        config = eval(mcmove)(config, beta, b, N, J)
+        config = eval(mcmove)(config, beta, N)
     for i in range(mcSteps):  # МК шаги после прихода в установившееся состояние для подсчёта физических величин
-        config = eval(mcmove)(config, beta, b, N, J)
-        Ene[i] = eval(calcEnergy)(config, b, N, J)  # считаем энергию
+        config = eval(mcmove)(config, beta, N)
+        Ene[i] = eval(calcEnergy)(config, N)  # считаем энергию
         Mag[i] = np.sum(config, dtype=np.longdouble)  # считаем намагниченность
     # следующая строка считает среднюю энергию, среднюю намагниченность, теплоёмкость и магнитную восприимчивость
-    E_mean, M_mean, C, X = np.mean(Ene), np.mean(Mag), beta ** 2 * np.std(Ene) ** 2, beta * np.std(Mag) ** 2
-    return E_mean / N ** d, M_mean / N ** d, C / N ** d, X / N ** d
+    E_mean, M_mean, C, X = np.mean(Ene), np.mean(Mag), \
+                           beta ** 2 * np.std(Ene, dtype=np.float64) ** 2, \
+                           beta * np.std(Mag, dtype=np.float64) ** 2
+    if d == 2:
+        summ = sum(sum(abs(config)))
+    else:
+        summ = sum(sum(sum(config)))
+    return [E_mean / summ, M_mean / summ, C / summ, X / summ]
 
 
-def processed(procs, calc, b, N, d, J):
+def processed(procs, calc, N, d):
     """
     Эта функция позволяет запустить мультипоточность моделирования.
     Мультипоточность достигается за счёт равномерного распределения температурных точек между
@@ -197,7 +255,7 @@ def processed(procs, calc, b, N, d, J):
     """
     processes = []
     for proc in range(procs):
-        p = multiprocessing.Process(target=ising, args=(calc, proc, b, N, d, J))
+        p = multiprocessing.Process(target=ising, args=(calc, proc, N, d))
         processes.append(p)
         p.start()
     for p in processes:
@@ -210,19 +268,16 @@ if __name__ == "__main__":
     Start = time.time()
     # создание папок для создания массивов с физическими величинами для дальнейшего их анализа
     for d in D:
-        dir_name = f'data_sq_{d}d_ising'
-        output_filename = f'data_sq_{d}d_ising'
+        dir_name = f'data_hex_{d}d_ising'
+        output_filename = f'data_hex_{d}d_ising'
         basedir = os.path.abspath(os.getcwd())
         if os.path.exists(dir_name):
             shutil.rmtree(dir_name)
         os.mkdir(dir_name)
 
-        b = 1  # для будущей работы
-        imp = 1  # для будущей работы
-
         # далее моделирование для каждого размера N каждой размерности d
         for N in globals()[f'NN_{d}']:
-            processed(n_proc, calc, b, N, d, J)  # строка, запускающее всё то, что было выше
+            processed(n_proc, calc, N, d)  # строка, запускающее всё то, что было выше
             # строчки ниже для объединения всех массивов от каждого потока в один единый
             E, M, C, X = [], [], [], []
             for i in range(n_proc):
@@ -252,9 +307,9 @@ if __name__ == "__main__":
         shutil.rmtree(dir_name)
     # код ниже объединяет все полученные графики на одном
     for d in D:
-        dir_name = f'data_sq_{d}d_ising'
+        dir_name = f'data_hex_{d}d_ising'
         basedir = os.path.abspath(os.getcwd())
-        zip_name = f'data_sq_{d}d_ising.zip'
+        zip_name = f'data_hex_{d}d_ising.zip'
         with zipfile.ZipFile(f"{zip_name}", 'r') as zip_ref:
             zip_ref.extractall(f"{basedir}/{dir_name}")
         for N in globals()[f"NN_{d}"]:
@@ -278,13 +333,8 @@ if __name__ == "__main__":
             ax = plt.subplot(2, 2, j + 1)
             for i in range(len(globals()[f"NN_{d}"])):
                 N = globals()[f"NN_{d}"][i]
-                plt.scatter(globals()[f"T_{d}d_N={N}"], globals()[f"{letter}_{d}d_N={N}"], s=16, label=f"N={N}")
-            if d == 2:
-                crit = 2.269
-                plt.axvline(x=crit, c='r', alpha=0.5, label=f"$T_c=${crit}")
-            if d == 3:
-                crit = 4.5
-                plt.axvline(x=crit, c='r', alpha=0.5, label=f"$T_c=${crit}")
+                plt.scatter(globals()[f"T_{d}d_N={N}"], globals()[f"{letter}_{d}d_N={N}"], s=8, label=f"N={N}")
+            crit = globals()[f"{letter}_{d}d_N={N}"].index(max(globals()[f"{letter}_{d}d_N={N}"]))
             ax.set_xlabel(r"$\frac{k_BT}{|\;J\;|}$", fontsize=15, fontweight="bold")
             label = str(labels[j])
             ax.set_ylabel(f"{label}", fontsize=15, fontweight="bold")
@@ -295,14 +345,14 @@ if __name__ == "__main__":
             ax.yaxis.set_minor_locator(MultipleLocator(1))
             f.tight_layout(pad=3.0)
             ax.legend(loc='best')
-        plt.savefig(f"plot_sq_ising_{d}d.png", bbox_inches='tight', dpi=400)
+        plt.savefig(f"plot_hex_ising_{d}d.png", bbox_inches='tight', dpi=400)
         plt.show()
 
     # вывод общего затраченного времени
     print(f'\ntotal time {((time.time() - Start) / 60):.2f} minutes')
 
 
-    # далее подсчёт альфы
+    # далее первичный (без хорошего учёта вершины) подсчёт альфы
 
     def func_powerlaw_2d(T, k, alpha, Tc=2.269):
         return k * np.power(np.abs((T - Tc) / Tc), alpha)
@@ -321,9 +371,9 @@ if __name__ == "__main__":
 
 
     for d in D:
-        dir_name = f'data_sq_{d}d_ising'
+        dir_name = f'data_hex_{d}d_ising'
         basedir = os.path.abspath(os.getcwd())
-        zip_name = f'data_sq_{d}d_ising.zip'
+        zip_name = f'data_hex_{d}d_ising.zip'
         with zipfile.ZipFile(f"{zip_name}", 'r') as zip_ref:
             zip_ref.extractall(f"{basedir}/{dir_name}")
         Chis = []
@@ -342,6 +392,7 @@ if __name__ == "__main__":
             Chis.append(globals()[f"C_{d}d_N={N}"])
         plt.figure(figsize=(16, 15))
         n = len(globals()[f"NN_{d}"])
+
         Ks = np.zeros(n)
         alphas = np.zeros(n)
         sigma_alpha = np.zeros(n)
@@ -393,23 +444,17 @@ if __name__ == "__main__":
             plt.show()
 
         n = [(1 / n) for n in globals()[f"NN_{d}"]]
-        # sol, cov = curve_fit(eval(f"powerlaw_{d}d"), n, TCs, maxfev=int(1e9))
-
+        sol, cov = curve_fit(eval(f"powerlaw_{d}d"), n, TCs, maxfev=int(1e6))
         plt.figure(figsize=(16, 6))
-
         plt.subplot(1, 2, 1)
         plt.errorbar(n, TCs, yerr=sigma_TCs, fmt='o', capsize=4)
         plt.xlabel(r'$\frac{1}{N}$', fontsize=16)
         plt.ylabel('$T$', fontsize=16)
         plt.title('Критическая температура $T_c$', fontsize=20, fontweight="bold")
-        if d == 2:
-            T_cr = 2.269
-        else:
-            T_cr = 4.5
-        plt.axhline(y=T_cr, linestyle='--', color=('red'), label='$T_{C,theory}$')
+        T_cr = np.average(TCs)
+        plt.axhline(y=T_cr, linestyle='--', color=('red'), label='$T_{C}, av$')
         plt.grid()
         plt.legend(fontsize=18, loc='best')
-
         plt.subplot(1, 2, 2)
         plt.errorbar(n, -alphas, yerr=sigma_alpha, fmt='o', capsize=4)
         plt.xlabel(r'$\frac{1}{N}$', fontsize=16)
@@ -418,215 +463,7 @@ if __name__ == "__main__":
             th = 0
         else:
             th = 1.25 / 10
-        plt.axhline(y=th, linestyle='--', color='red', label=r'$\alpha_{t}$')
-        plt.grid()
-        plt.legend(fontsize=18, loc='best')
-        plt.show()
-
-    # гамма
-    for d in D:
-        dir_name = f'data_sq_{d}d_ising'
-        basedir = os.path.abspath(os.getcwd())
-        zip_name = f'data_sq_{d}d_ising.zip'
-        with zipfile.ZipFile(f"{zip_name}", 'r') as zip_ref:
-            zip_ref.extractall(f"{basedir}/{dir_name}")
-        Chis = []
-        for N in globals()[f"NN_{d}"]:
-            name = f"{d}d_N={N}.txt"
-            with open(f"{basedir}\\{dir_name}\\E_{name}", "r") as f:
-                globals()[f"E_{d}d_N={N}"] = (eval(f.readline()))
-            with open(f"{basedir}\\{dir_name}\\M_{name}", "r") as f:
-                globals()[f"M_{d}d_N={N}"] = abs(np.array(eval(f.readline()))).tolist()
-            with open(f"{basedir}\\{dir_name}\\C_{name}", "r") as f:
-                globals()[f"C_{d}d_N={N}"] = (eval(f.readline()))
-            with open(f"{basedir}\\{dir_name}\\X_{name}", "r") as f:
-                globals()[f"X_{d}d_N={N}"] = (eval(f.readline()))
-            with open(f"{basedir}\\{dir_name}\\T_{name}", "r") as f:
-                globals()[f"T_{d}d_N={N}"] = (eval(f.readline()))
-            Chis.append(globals()[f"X_{d}d_N={N}"])
-        plt.figure(figsize=(16, 15))
-        n = len(globals()[f"NN_{d}"])
-        Ks = np.zeros(n)
-        alphas = np.zeros(n)
-        sigma_alpha = np.zeros(n)
-        TCs = np.zeros(n)
-        sigma_TCs = np.zeros(n)
-        show = True
-        for i, Chi in enumerate(Chis):
-            C = Chi
-            N = globals()[f"NN_{d}"][i]
-            T = np.linspace(globals()[f"T_{d}d_N={N}"][0], globals()[f"T_{d}d_N={N}"][-1], len(Chi))
-            if len(Chis) > 6:
-                show = False
-                Tmax = np.argmax(Chi)
-                Tmax = C.index(Chi[Tmax])
-                Chi = C
-                T = np.linspace(globals()[f"T_{d}d_N={N}"][0], globals()[f"T_{d}d_N={N}"][-1], len(Chi))
-                sol, cov = curve_fit(eval(f"func_powerlaw_{d}d"), T[Tmax:], Chi[Tmax:], maxfev=int(1e9))
-                Ks[i] = sol[0]
-                alphas[i] = sol[1]
-                TCs[i] = sol[2]
-                sigma_alpha[i] = cov[1, 1]
-                sigma_TCs[i] = cov[2, 2]
-            else:
-                ax = plt.subplot(3, 2, i + 1)
-                Tmax = np.argmax(Chi)
-                Tmax = C.index(Chi[Tmax])
-                Chi = C
-                T = np.linspace(globals()[f"T_{d}d_N={N}"][0], globals()[f"T_{d}d_N={N}"][-1], len(Chi))
-                plt.scatter(T[Tmax:], Chi[Tmax:], s=0.6)
-                sol, cov = curve_fit(eval(f"func_powerlaw_{d}d"), T[Tmax:], Chi[Tmax:], maxfev=int(1e9))
-                Ks[i] = sol[0]
-                alphas[i] = sol[1]
-                TCs[i] = sol[2]
-                sigma_alpha[i] = cov[1, 1]
-                sigma_TCs[i] = cov[2, 2]
-                ax.plot(T[Tmax:], eval(f"func_powerlaw_{d}d")(T[Tmax:], Ks[i], alphas[i], TCs[i]), 'orange',
-                        label='fit')
-                ax.scatter(T[Tmax:], Chi[Tmax:], label=f'N={N}')
-                ax.text(0.8, 0.5, r'$\alpha$' + '= {}\n$T_c$ = {}'.format('%.3f' % (-1 * alphas[i]), '%.3f' % TCs[i]),
-                        transform=ax.transAxes,
-                        bbox=dict(alpha=0.7), fontsize=10)
-                ax.set_xlabel('Температура', fontsize=10)
-                ax.set_ylabel('Теплоёмкость', fontsize=10)
-                ax.set_title(f"Аппроксимация N={N}, d={d}", fontsize=10, fontweight="bold")
-                plt.legend(loc='best')
-                plt.subplots_adjust(hspace=0.45)
-                plt.grid()
-        if show:
-            plt.show()
-
-        n = [(1 / n) for n in globals()[f"NN_{d}"]]
-        # sol, cov = curve_fit(eval(f"powerlaw_{d}d"), n, TCs, maxfev=int(1e9))
-
-        plt.figure(figsize=(16, 6))
-
-        plt.subplot(1, 2, 1)
-        plt.errorbar(n, TCs, yerr=sigma_TCs, fmt='o', capsize=4)
-        plt.xlabel(r'$\frac{1}{N}$', fontsize=16)
-        plt.ylabel('$T$', fontsize=16)
-        plt.title('Критическая температура $T_c$', fontsize=20, fontweight="bold")
-        if d == 2:
-            T_cr = 2.269
-        else:
-            T_cr = 4.5
-        plt.axhline(y=T_cr, linestyle='--', color=('red'), label='$T_{C,theory}$')
-        plt.grid()
-        plt.legend(fontsize=18, loc='best')
-
-        plt.subplot(1, 2, 2)
-        plt.errorbar(n, -alphas, yerr=sigma_alpha, fmt='o', capsize=4)
-        plt.xlabel(r'$\frac{1}{N}$', fontsize=16)
-        plt.title(r'Критический показатель $\alpha$', fontsize=20, fontweight="bold")
-        if d == 2:
-            th = 0
-        else:
-            th = 1.25 / 10
-        plt.axhline(y=th, linestyle='--', color='red', label=r'$\alpha_{t}$')
-        plt.grid()
-        plt.legend(fontsize=18, loc='best')
-        plt.show()
-
-    # бета
-    for d in D:
-        dir_name = f'data_sq_{d}d_ising'
-        basedir = os.path.abspath(os.getcwd())
-        zip_name = f'data_sq_{d}d_ising.zip'
-        with zipfile.ZipFile(f"{zip_name}", 'r') as zip_ref:
-            zip_ref.extractall(f"{basedir}/{dir_name}")
-        Chis = []
-        for N in globals()[f"NN_{d}"]:
-            name = f"{d}d_N={N}.txt"
-            with open(f"{basedir}\\{dir_name}\\E_{name}", "r") as f:
-                globals()[f"E_{d}d_N={N}"] = (eval(f.readline()))
-            with open(f"{basedir}\\{dir_name}\\M_{name}", "r") as f:
-                globals()[f"M_{d}d_N={N}"] = abs(np.array(eval(f.readline()))).tolist()
-            with open(f"{basedir}\\{dir_name}\\C_{name}", "r") as f:
-                globals()[f"C_{d}d_N={N}"] = (eval(f.readline()))
-            with open(f"{basedir}\\{dir_name}\\X_{name}", "r") as f:
-                globals()[f"X_{d}d_N={N}"] = (eval(f.readline()))
-            with open(f"{basedir}\\{dir_name}\\T_{name}", "r") as f:
-                globals()[f"T_{d}d_N={N}"] = (eval(f.readline()))
-            Chis.append(globals()[f"M_{d}d_N={N}"])
-        plt.figure(figsize=(16, 15))
-        n = len(globals()[f"NN_{d}"])
-        Ks = np.zeros(n)
-        alphas = np.zeros(n)
-        sigma_alpha = np.zeros(n)
-        TCs = np.zeros(n)
-        sigma_TCs = np.zeros(n)
-        show = True
-        for i, Chi in enumerate(Chis):
-            C = Chi
-            N = globals()[f"NN_{d}"][i]
-            T = np.linspace(globals()[f"T_{d}d_N={N}"][0], globals()[f"T_{d}d_N={N}"][-1], len(Chi))
-            if len(Chis) > 6:
-                show = False
-                Tmax = np.argmax(Chi)
-                Tmax = C.index(Chi[Tmax])
-                Chi = C
-                T = np.linspace(globals()[f"T_{d}d_N={N}"][0], globals()[f"T_{d}d_N={N}"][-1], len(Chi))
-                sol, cov = curve_fit(eval(f"func_powerlaw_{d}d"), T[Tmax:], Chi[Tmax:], maxfev=int(1e9))
-                Ks[i] = sol[0]
-                alphas[i] = sol[1]
-                TCs[i] = sol[2]
-                sigma_alpha[i] = cov[1, 1]
-                sigma_TCs[i] = cov[2, 2]
-            else:
-                ax = plt.subplot(3, 2, i + 1)
-                Tmax = np.argmax(Chi)
-                Tmax = C.index(Chi[Tmax])
-                Chi = C
-                T = np.linspace(globals()[f"T_{d}d_N={N}"][0], globals()[f"T_{d}d_N={N}"][-1], len(Chi))
-                plt.scatter(T[Tmax:], Chi[Tmax:], s=0.6)
-                sol, cov = curve_fit(eval(f"func_powerlaw_{d}d"), T[Tmax:], Chi[Tmax:], maxfev=int(1e9))
-                Ks[i] = sol[0]
-                alphas[i] = sol[1]
-                TCs[i] = sol[2]
-                sigma_alpha[i] = cov[1, 1]
-                sigma_TCs[i] = cov[2, 2]
-                ax.plot(T[Tmax:], eval(f"func_powerlaw_{d}d")(T[Tmax:], Ks[i], alphas[i], TCs[i]), 'orange',
-                        label='fit')
-                ax.scatter(T[Tmax:], Chi[Tmax:], label=f'N={N}')
-                ax.text(0.8, 0.5, r'$\alpha$' + '= {}\n$T_c$ = {}'.format('%.3f' % (-1 * alphas[i]), '%.3f' % TCs[i]),
-                        transform=ax.transAxes,
-                        bbox=dict(alpha=0.7), fontsize=10)
-                ax.set_xlabel('Температура', fontsize=10)
-                ax.set_ylabel('Теплоёмкость', fontsize=10)
-                ax.set_title(f"Аппроксимация N={N}, d={d}", fontsize=10, fontweight="bold")
-                plt.legend(loc='best')
-                plt.subplots_adjust(hspace=0.45)
-                plt.grid()
-        if show:
-            plt.show()
-
-        n = [(1 / n) for n in globals()[f"NN_{d}"]]
-        # sol, cov = curve_fit(eval(f"powerlaw_{d}d"), n, TCs, maxfev=int(1e9))
-
-        plt.figure(figsize=(16, 6))
-
-        plt.subplot(1, 2, 1)
-        plt.errorbar(n, TCs, yerr=sigma_TCs, fmt='o', capsize=4)
-        plt.xlabel(r'$\frac{1}{N}$', fontsize=16)
-        plt.ylabel('$T$', fontsize=16)
-        plt.title('Критическая температура $T_c$', fontsize=20, fontweight="bold")
-        if d == 2:
-            T_cr = 2.269
-        else:
-            T_cr = 4.5
-        plt.axhline(y=T_cr, linestyle='--', color=('red'), label='$T_{C,theory}$')
-        plt.grid()
-        plt.legend(fontsize=18, loc='best')
-
-        plt.subplot(1, 2, 2)
-        plt.errorbar(n, -alphas, yerr=sigma_alpha, fmt='o', capsize=4)
-        plt.xlabel(r'$\frac{1}{N}$', fontsize=16)
-        plt.title(r'Критический показатель $\alpha$', fontsize=20, fontweight="bold")
-        if d == 2:
-            th = 0
-        else:
-            th = 1.25 / 10
-        plt.axhline(y=th, linestyle='--', color='red', label=r'$\alpha_{t}$')
+        plt.axhline(y=th, linestyle='--', color=('red'), label=r'$\alpha_{theory}$')
         plt.grid()
         plt.legend(fontsize=18, loc='best')
         plt.show()
