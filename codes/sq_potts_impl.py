@@ -2,21 +2,17 @@ import shutil
 import numpy as np
 from numpy.random import rand
 import matplotlib.pyplot as plt
-import matplotlib
 import time
 import multiprocessing
 import os
 from datetime import datetime
 import zipfile
+plt.rcParams.update({"font.family": "serif", "font.cursive": ["Comic Neue", "Comic Sans MS"], })
 
-matplotlib.rcParams['text.latex.preamble'] = \
-    r'\usepackage{amsmath} \usepackage{amssymb} \usepackage{palatino} \usepackage{textcomp}'
-matplotlib.rcParams['font.family'] = 'sans-serif'
-matplotlib.rcParams['font.sans-serif'] = ['Tahoma']
 n_proc = multiprocessing.cpu_count()
-eqSteps = int(1e3)
+eqSteps = int(5e2)
 mcSteps = int(2e3)
-it = 800
+it = 600
 calc = it // n_proc + ((it // n_proc) != (it / n_proc))
 nt = int(calc * n_proc)
 NN_2 = [10, 20, 25, 30, 35]
@@ -273,47 +269,47 @@ if __name__ == "__main__":
                 zip_name = f'data_sq_{d}d_q={q}_p={p}_potts.zip'
                 with zipfile.ZipFile(f"{zip_name}", 'r') as zip_ref:
                     zip_ref.extractall(f"{basedir}/{dir_name}")
-                for N in globals()[f"NN_{d}"]:
-                    name = f"{d}d_q={q}_p={p}_N={N}.txt"
-                    with open(f"{basedir}/{dir_name}/E_{name}", "r") as f:
-                        globals()[f"E_{d}d_q={q}_p={p}_N={N}"] = (eval(f.readline()))
-                    with open(f"{basedir}/{dir_name}/M_{name}", "r") as f:
-                        globals()[f"M_{d}d_q={q}_p={p}_N={N}"] = abs(np.array(eval(f.readline()))).tolist()
-                    with open(f"{basedir}/{dir_name}/C_{name}", "r") as f:
-                        globals()[f"C_{d}d_q={q}_p={p}_N={N}"] = (eval(f.readline()))
-                    with open(f"{basedir}/{dir_name}/X_{name}", "r") as f:
-                        globals()[f"X_{d}d_q={q}_p={p}_N={N}"] = (eval(f.readline()))
-                    with open(f"{basedir}/{dir_name}/T_{name}", "r") as f:
-                        globals()[f"T_{d}d_q={q}_p={p}_N={N}"] = (eval(f.readline()))
-                f = plt.figure(figsize=(18, 10))
-                if h == 0:
-                    sign = '='
-                elif h > 0:
-                    sign = '+'
-                else:
-                    sign = '-'
-                suptitle = f"$q$={q}, $d$={d}, $h$={h}, $p$={p}"
-                f.suptitle(suptitle, fontsize=15, fontweight="bold")
-                titles = ['Энергия', 'Намагниченность', 'Теплоёмкость', 'Магн. восприимчивость']
-                for j in range(4):
-                    title = titles[j]
-                    letter = 'EMCX'[j]
-                    labels = ['$E$', '$M$', '$C_v$', '$\chi$']
-                    ax = plt.subplot(2, 2, j + 1)
-                    for i in range(len(globals()[f"NN_{d}"])):
-                        N = globals()[f"NN_{d}"][i]
-                        plt.scatter(globals()[f"T_{d}d_q={q}_p={p}_N={N}"],
-                                    globals()[f"{letter}_{d}d_q={q}_p={p}_N={N}"], s=8, label=f"N={N}")
-                    ax.set_xlabel(r"$\frac{k_BT}{|\;J\;|}$", fontsize=15, fontweight="bold")
-                    # crit = round(abs(J) / (math.log(1 + q ** (1 / 2))), 3)
-                    # plt.axvline(x=crit, c='r', alpha=0.5, label=f"$T_c=${crit}")
-                    label = str(labels[j])
-                    ax.set_ylabel(f"{label}", fontsize=15, fontweight="bold")
-                    ax.axis('tight')
-                    ax.set_title(title, fontsize=20, fontweight="bold")
-                    ax.grid('--', alpha=0.5)
-                    f.tight_layout(pad=3.0)
-                    ax.legend(loc='best')
-                fig_name = f"plot_potts_{d}d_q={q}_h{sign}0_p={p}.png"
-                plt.savefig(f"{fig_name}", bbox_inches='tight', dpi=400)
+                # for N in globals()[f"NN_{d}"]:
+                #     name = f"{d}d_q={q}_p={p}_N={N}.txt"
+                #     with open(f"{basedir}/{dir_name}/E_{name}", "r") as f:
+                #         globals()[f"E_{d}d_q={q}_p={p}_N={N}"] = (eval(f.readline()))
+                #     with open(f"{basedir}/{dir_name}/M_{name}", "r") as f:
+                #         globals()[f"M_{d}d_q={q}_p={p}_N={N}"] = abs(np.array(eval(f.readline()))).tolist()
+                #     with open(f"{basedir}/{dir_name}/C_{name}", "r") as f:
+                #         globals()[f"C_{d}d_q={q}_p={p}_N={N}"] = (eval(f.readline()))
+                #     with open(f"{basedir}/{dir_name}/X_{name}", "r") as f:
+                #         globals()[f"X_{d}d_q={q}_p={p}_N={N}"] = (eval(f.readline()))
+                #     with open(f"{basedir}/{dir_name}/T_{name}", "r") as f:
+                #         globals()[f"T_{d}d_q={q}_p={p}_N={N}"] = (eval(f.readline()))
+                # f = plt.figure(figsize=(18, 10))
+                # if h == 0:
+                #     sign = '='
+                # elif h > 0:
+                #     sign = '+'
+                # else:
+                #     sign = '-'
+                # suptitle = f"$q$={q}, $d$={d}, $h$={h}, $p$={p}"
+                # f.suptitle(suptitle, fontsize=15, fontweight="bold")
+                # titles = ['Энергия', 'Намагниченность', 'Теплоёмкость', 'Магн. восприимчивость']
+                # for j in range(4):
+                #     title = titles[j]
+                #     letter = 'EMCX'[j]
+                #     labels = ['$E$', '$M$', '$C_v$', '$\chi$']
+                #     ax = plt.subplot(2, 2, j + 1)
+                #     for i in range(len(globals()[f"NN_{d}"])):
+                #         N = globals()[f"NN_{d}"][i]
+                #         plt.scatter(globals()[f"T_{d}d_q={q}_p={p}_N={N}"],
+                #                     globals()[f"{letter}_{d}d_q={q}_p={p}_N={N}"], s=8, label=f"N={N}")
+                #     ax.set_xlabel(r"$\frac{k_BT}{|\;J\;|}$", fontsize=15, fontweight="bold")
+                #     # crit = round(abs(J) / (math.log(1 + q ** (1 / 2))), 3)
+                #     # plt.axvline(x=crit, c='r', alpha=0.5, label=f"$T_c=${crit}")
+                #     label = str(labels[j])
+                #     ax.set_ylabel(f"{label}", fontsize=15, fontweight="bold")
+                #     ax.axis('tight')
+                #     ax.set_title(title, fontsize=20, fontweight="bold")
+                #     ax.grid('--', alpha=0.5)
+                #     f.tight_layout(pad=3.0)
+                #     ax.legend(loc='best')
+                # fig_name = f"plot_potts_{d}d_q={q}_h{sign}0_p={p}.png"
+                # plt.savefig(f"{fig_name}", bbox_inches='tight', dpi=400)
                 # plt.show()

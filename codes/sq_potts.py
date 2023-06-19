@@ -2,14 +2,12 @@ import math
 import shutil
 import numpy as np
 from numpy.random import rand
-import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib.pyplot as plt
 import time
 import multiprocessing
 import os
 from datetime import datetime
-from matplotlib.ticker import MultipleLocator
-from scipy.optimize import curve_fit
 import zipfile
 import warnings
 warnings.filterwarnings("ignore")
@@ -20,20 +18,19 @@ matplotlib.rcParams['font.family'] = 'sans-serif'
 matplotlib.rcParams['font.sans-serif'] = ['Tahoma']
 
 n_proc = multiprocessing.cpu_count()
-eqSteps = int(1e2)
-mcSteps = int(2e3)
-it = 120
+eqSteps = int(5e2)
+mcSteps = int(1e3)
+it = 300
 calc = it // n_proc + ((it // n_proc) != (it / n_proc))
 nt = int(calc * n_proc)
-NN_2 = [15]
-NN_3 = [10]
-D = [3]
-Q = [2]
-T_2 = np.linspace(1., 1.5, nt)
-T_3 = np.linspace(1.5, 2.5, nt)
+NN_2 = [10, 20, 25, 30, 35]
+NN_3 = [10, 20, 25, 30]
+D = [2, 3]
+Q = [2, 3]
+T_2 = np.linspace(1.1, 1.2, nt)
+T_3 = np.linspace(2.1, 2.25, nt)
 J = 1
 h = 0
-
 
 def mcmove_2d(config, beta, n, J, q, h):
     for _ in range(n ** 2):
@@ -216,44 +213,44 @@ if __name__ == "__main__":
     for q in Q:
         for d in D:
             if d == 2 or (q == 2 and d == 3):
-                dir_name = f'data_sq_{d}d_q={q}_potts'
-                output_filename = f'data_sq_{d}d_q={q}_potts'
-                basedir = os.path.abspath(os.getcwd())
-                if os.path.exists(dir_name):
-                    shutil.rmtree(dir_name)
-                os.mkdir(dir_name)
-                for N in globals()[f'NN_{d}']:
-                    processed(n_proc, calc, N, d, J, q, h)
-                    E, M, C, X = [], [], [], []
-                    for i in range(n_proc):
-                        with open(f"E_{i}.txt", "r") as f:
-                            E.append(eval(f.readline()))
-                        with open(f"M_{i}.txt", "r") as f:
-                            M.append(eval(f.readline()))
-                        with open(f"C_{i}.txt", "r") as f:
-                            C.append(eval(f.readline()))
-                        with open(f"X_{i}.txt", "r") as f:
-                            X.append(eval(f.readline()))
-                        os.remove(f"E_{i}.txt")
-                        os.remove(f"M_{i}.txt")
-                        os.remove(f"C_{i}.txt")
-                        os.remove(f"X_{i}.txt")
-                    E = [a for b in E for a in b]
-                    M = np.array([a for b in M for a in b])
-                    C = [a for b in C for a in b]
-                    X = [a for b in X for a in b]
-                    for i in range(5):
-                        file = open(f"{basedir}/{dir_name}/{'EMCXT'[i]}_{d}d_q={q}_N={N}.txt", "w")
-                        file.write(str([E, M.tolist(), C, X, globals()[f'T_{d}'].tolist()][i]))
-                        file.close()
-                shutil.make_archive(output_filename, 'zip', dir_name)
-                shutil.rmtree(dir_name)
+                # dir_name = f'data_sq_{d}d_q={q}_potts'
+                # output_filename = f'data_sq_{d}d_q={q}_potts'
+                # basedir = os.path.abspath(os.getcwd())
+                # if os.path.exists(dir_name):
+                #     shutil.rmtree(dir_name)
+                # os.mkdir(dir_name)
+                # for N in globals()[f'NN_{d}']:
+                #     processed(n_proc, calc, N, d, J, q, h)
+                #     E, M, C, X = [], [], [], []
+                #     for i in range(n_proc):
+                #         with open(f"E_{i}.txt", "r") as f:
+                #             E.append(eval(f.readline()))
+                #         with open(f"M_{i}.txt", "r") as f:
+                #             M.append(eval(f.readline()))
+                #         with open(f"C_{i}.txt", "r") as f:
+                #             C.append(eval(f.readline()))
+                #         with open(f"X_{i}.txt", "r") as f:
+                #             X.append(eval(f.readline()))
+                #         os.remove(f"E_{i}.txt")
+                #         os.remove(f"M_{i}.txt")
+                #         os.remove(f"C_{i}.txt")
+                #         os.remove(f"X_{i}.txt")
+                #     E = [a for b in E for a in b]
+                #     M = np.array([a for b in M for a in b])
+                #     C = [a for b in C for a in b]
+                #     X = [a for b in X for a in b]
+                #     for i in range(5):
+                #         file = open(f"{basedir}/{dir_name}/{'EMCXT'[i]}_{d}d_q={q}_N={N}.txt", "w")
+                #         file.write(str([E, M.tolist(), C, X, globals()[f'T_{d}'].tolist()][i]))
+                #         file.close()
+                # shutil.make_archive(output_filename, 'zip', dir_name)
+                # shutil.rmtree(dir_name)
                 print(f'\ntotal time {((time.time() - Start) / 60):.2f} minutes')
                 dir_name = f'data_sq_{d}d_q={q}_potts'
                 basedir = os.path.abspath(os.getcwd())
                 zip_name = f'data_sq_{d}d_q={q}_potts.zip'
-                with zipfile.ZipFile(f"{zip_name}", 'r') as zip_ref:
-                    zip_ref.extractall(f"{basedir}/{dir_name}")
+                # with zipfile.ZipFile(f"{zip_name}", 'r') as zip_ref:
+                #     zip_ref.extractall(f"{basedir}/{dir_name}")
                 for N in globals()[f"NN_{d}"]:
                     name = f"{d}d_q={q}_N={N}.txt"
                     with open(f"{basedir}/{dir_name}/E_{name}", "r") as f:
@@ -298,4 +295,4 @@ if __name__ == "__main__":
                     ax.legend(loc='best')
                 fig_name = f"plot_potts_{d}d_q={q}_h{sign}0.png"
                 plt.savefig(f"{fig_name}", bbox_inches='tight', dpi=400)
-                # plt.show()
+                plt.show()
